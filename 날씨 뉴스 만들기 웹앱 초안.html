@@ -1,0 +1,670 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>날씨 뉴스 만들기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&family=Noto+Sans+KR:wght@400;700;900&display=swap">
+<style>
+/* 레이아웃: 위쪽 단계 바(1~6) + 한 번에 한 단계만 크게 보이는 작업 화면 */
+:root{
+  --bg:#eef2f8; --card:#ffffff; --ink:#18213a; --muted:#5f6b84; --line:#d9e0ec;
+  --accent:#1f5fd1; --accent-soft:#e6eefc; --live:#e23a3f; --ok:#18925a; --warn:#c0392b;
+  --display:"Jua","Noto Sans KR",system-ui,sans-serif; --body:"Noto Sans KR",system-ui,sans-serif;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px}
+button,input,select{font:inherit;color:inherit}
+[hidden]{display:none!important}
+header{position:sticky;top:0;z-index:20;background:var(--card);border-bottom:1px solid var(--line);
+  padding:10px max(16px,env(safe-area-inset-left)) 10px max(16px,env(safe-area-inset-right))}
+.brand{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px}
+.brand h1{font-family:var(--display);font-weight:400;font-size:22px;margin:0;display:flex;align-items:center;gap:8px}
+.brand h1 .dot{width:10px;height:10px;border-radius:50%;background:var(--live)}
+.brand .ver{font-size:12px;color:var(--muted)}
+nav.steps{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+nav.steps::-webkit-scrollbar{display:none}
+.step-pill{flex:0 0 auto;display:flex;align-items:center;gap:6px;border:1.5px solid var(--line);background:var(--card);
+  border-radius:999px;padding:6px 12px 6px 6px;cursor:pointer;font-weight:700;font-size:14px;white-space:nowrap}
+.step-pill .n{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent);font-size:13px}
+.step-pill.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.step-pill.on .n{background:#fff}
+.step-pill .tick{color:var(--ok);font-size:13px}
+.step-pill.on .tick{color:#fff}
+main{max-width:1000px;margin:0 auto;padding:18px max(16px,env(safe-area-inset-left)) 120px max(16px,env(safe-area-inset-right))}
+section.step{display:flex;flex-direction:column;gap:16px}
+.step h2{font-family:var(--display);font-weight:400;font-size:32px;margin:0}
+.guide{background:var(--accent-soft);border-left:4px solid var(--accent);border-radius:8px;padding:12px 14px;line-height:1.6;font-size:16px}
+.box{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:14px}
+.box > .h{font-weight:900;color:var(--accent);font-size:15px;display:flex;align-items:center;gap:8px}
+.box > .h .sub{color:var(--muted);font-weight:400;font-size:13px}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+@media (max-width:560px){.grid2{grid-template-columns:1fr}}
+.field{display:flex;flex-direction:column;gap:6px;min-width:0}
+.field label{font-weight:700;font-size:15px}
+.field label small{font-weight:400;color:var(--muted);font-size:12px;margin-left:4px}
+input[type=text],input[type=number],input[type=date]{width:100%;border:1.5px solid var(--line);background:#f6f8fc;border-radius:10px;padding:11px 12px;font-size:16px}
+input:focus{outline:2px solid var(--accent);outline-offset:1px;background:#fff}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1.5px solid var(--line);background:#fff;border-radius:999px;padding:7px 12px;font-size:14px;cursor:pointer;font-weight:700}
+.chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.themes{display:flex;flex-wrap:wrap;gap:10px}
+.theme{width:96px;border:2px solid var(--line);border-radius:12px;padding:6px;background:#fff;cursor:pointer;display:flex;flex-direction:column;gap:6px;align-items:center;font-size:13px;font-weight:700}
+.theme .sw{width:100%;height:44px;border-radius:8px}
+.theme.on{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+/* 날씨 자료 표 */
+.wtable{width:100%;border-collapse:collapse;table-layout:fixed}
+.wtable th,.wtable td{border:1px solid var(--line);padding:8px;vertical-align:middle}
+.wtable th{background:var(--accent-soft);font-size:14px}
+.wtable td.lab{font-weight:700;font-size:14px;width:28%;background:#fafbfe}
+.wtable input{padding:8px 10px}
+.wtable .chips .chip{padding:5px 9px;font-size:13px}
+.wrap-x{overflow-x:auto}
+/* 촬영 */
+.stage{position:relative;width:100%;max-width:100%;aspect-ratio:16/9;background:#0e1426;border-radius:12px;overflow:hidden}
+.stage canvas,.stage video{position:absolute;inset:0;width:100%;height:100%;display:block}
+.rec-badge{position:absolute;top:10px;left:50%;transform:translateX(-50%);background:var(--live);color:#fff;font-weight:900;font-size:14px;border-radius:8px;padding:4px 10px;font-variant-numeric:tabular-nums}
+.hint{position:absolute;left:10px;top:10px;background:rgba(0,0,0,.6);color:#fff;font-size:13px;border-radius:8px;padding:4px 10px}
+.cam-msg{font-size:14px;color:var(--warn);font-weight:700}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+.btn{border:none;text-decoration:none;display:inline-block;border-radius:999px;padding:12px 18px;font-weight:900;font-size:16px;cursor:pointer;background:var(--accent-soft);color:var(--accent)}
+.btn.main{background:var(--accent);color:#fff}
+.btn.rec{background:var(--live);color:#fff}
+.btn.ghost{background:transparent;border:1.5px solid var(--line);color:var(--ink)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn:focus-visible,.chip:focus-visible,.step-pill:focus-visible,.theme:focus-visible{outline:3px solid #f5b400;outline-offset:2px}
+.status{font-weight:900;font-size:14px}
+.status.ok{color:var(--ok)} .status.no{color:var(--muted)}
+.toggle{display:flex;gap:8px}
+/* 완성 */
+.scene-list{display:flex;flex-direction:column;gap:8px}
+.scene-row{display:flex;align-items:center;justify-content:space-between;gap:10px;background:#f6f8fc;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.scene-row b{font-size:15px}
+.progress{height:12px;border-radius:999px;background:var(--accent-soft);overflow:hidden}
+.progress > i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
+.note{font-size:14px;color:var(--muted);line-height:1.6}
+footer.nav{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--card);border-top:1px solid var(--line);
+  padding:10px max(16px,env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));display:flex;justify-content:space-between;gap:10px}
+footer.nav .btn{min-width:120px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><h1><span class="dot" aria-hidden="true"></span>날씨 뉴스 만들기</h1><span class="ver">초안 v0.1</span></div>
+  <nav class="steps" id="steps" aria-label="단계"></nav>
+</header>
+
+<main>
+<!-- 1 뉴스 준비 -->
+<section class="step" data-step="1">
+  <h2>뉴스 준비</h2>
+  <div class="guide">뉴스 이름과 모둠 친구들의 역할·이름을 써요. 이름은 영상 속 이름표와 마지막 '함께한 사람들'에 나와요.</div>
+  <div class="box">
+    <div class="field"><label for="news">뉴스 이름</label>
+      <input type="text" id="news" placeholder="예: 오늘 날씨 어때?" maxlength="16"></div>
+  </div>
+  <div class="box">
+    <div class="h">역할 이름</div>
+    <div class="grid2">
+      <div class="field"><label for="r-anchor">아나운서<small>장면 1</small></label><input type="text" id="r-anchor" placeholder="아나운서 이름" maxlength="8"></div>
+      <div class="field"><label for="r-caster">기상캐스터<small>장면 2</small></label><input type="text" id="r-caster" placeholder="기상캐스터 이름" maxlength="8"></div>
+      <div class="field"><label for="r-reporter">기자<small>장면 3</small></label><input type="text" id="r-reporter" placeholder="기자 이름" maxlength="8"></div>
+      <div class="field"><label for="r-citizen">시민<small>장면 3</small></label><input type="text" id="r-citizen" placeholder="시민 이름" maxlength="8"></div>
+    </div>
+  </div>
+</section>
+
+<!-- 2 날씨 자료 -->
+<section class="step" data-step="2" hidden>
+  <h2>날씨 자료</h2>
+  <div class="guide">활동지 '2. 날씨 조사하기'에 적은 내용을 그대로 옮겨 적어요. 적은 내용은 장면 2의 날씨 화면에 나와요.</div>
+  <div class="box">
+    <div class="grid2">
+      <div class="field"><label for="w-region">지역</label><input type="text" id="w-region" placeholder="예: 성남" maxlength="10"></div>
+      <div class="field"><label for="w-tip">생활 꿀팁 한마디<small>화면 아래 자막으로 나와요</small></label><input type="text" id="w-tip" placeholder="예: 우산을 꼭 챙기세요." maxlength="40"></div>
+    </div>
+    <div class="wrap-x">
+    <table class="wtable" id="wtable">
+      <thead><tr><th>항목</th><th>오늘 <input type="date" id="d-today" aria-label="오늘 날짜"></th><th>내일 <input type="date" id="d-tomorrow" aria-label="내일 날짜"></th></tr></thead>
+      <tbody></tbody>
+    </table>
+    </div>
+  </div>
+</section>
+
+<!-- 3 장면 1 -->
+<section class="step" data-step="3" hidden>
+  <h2>장면 1 오프닝</h2>
+  <div class="guide">아나운서가 뉴스룸에서 인사하고, 오늘 날씨 소식을 한 줄로 알린 뒤 기상캐스터를 불러요. 20초 안팎으로 찍어요.</div>
+  <div class="box">
+    <div class="h">① 꾸미기</div>
+    <div class="field"><label>뉴스룸 고르기</label><div class="themes" id="themes"></div></div>
+    <div class="field"><label for="c1">자막<small>없어도 돼요</small></label><input type="text" id="c1" placeholder="예: 주말 내내 한겨울 추위… 내일 전국에 비" maxlength="40"></div>
+  </div>
+  <div class="box shoot" data-scene="s1"></div>
+</section>
+
+<!-- 4 장면 2 -->
+<section class="step" data-step="4" hidden>
+  <h2>장면 2 날씨예보</h2>
+  <div class="guide">기상캐스터가 기온, 바람, 습도, 구름의 양, 강수량 같은 기상 요소로 오늘과 내일 날씨를 알려요. 날씨 자료 화면 옆에 서서 40초~1분 동안 찍어요.</div>
+  <div class="box">
+    <div class="h">① 꾸미기 <span class="sub">날씨 화면은 2단계 '날씨 자료'에서 바꿔요</span></div>
+    <div class="field"><label>날씨 화면 위치</label><div class="chips" id="board-side"></div></div>
+    <div class="field"><label for="c2">자막<small>비워 두면 생활 꿀팁 한마디가 나와요</small></label><input type="text" id="c2" placeholder="예: 내일 아침부터 비… 그친 뒤 다시 추워져" maxlength="40"></div>
+  </div>
+  <div class="box shoot" data-scene="s2"></div>
+</section>
+
+<!-- 5 장면 3 -->
+<section class="step" data-step="5" hidden>
+  <h2>장면 3 인터뷰</h2>
+  <div class="guide">기자와 시민이 날씨 때문에 옷차림, 생활용품, 건강, 야외 활동 등이 어떻게 달라졌는지 묻고 답해요. 두 사람이 함께 나오게 40초~1분 동안 찍어요.</div>
+  <div class="box">
+    <div class="h">① 꾸미기</div>
+    <div class="toggle" id="iv-toggle"></div>
+    <div id="iv-opts" class="grid2">
+      <div class="field"><label for="town">시민이 사는 동네<small>시민 이름표에 나와요</small></label><input type="text" id="town" placeholder="예: 분당구" maxlength="10"></div>
+      <div class="field"><label>날씨 효과</label><div class="chips" id="fx"></div></div>
+      <div class="field" style="grid-column:1/-1"><label for="c3">자막<small>없어도 돼요</small></label><input type="text" id="c3" placeholder="예: 갑자기 찾아온 추위… 시민들 &quot;벌써 겨울&quot;" maxlength="40"></div>
+    </div>
+  </div>
+  <div class="box shoot" data-scene="s3"></div>
+</section>
+
+<!-- 6 완성 -->
+<section class="step" data-step="6" hidden>
+  <h2>완성</h2>
+  <div class="guide">찍은 장면을 확인하고 하나의 영상으로 합쳐요. 시작 화면과 '함께한 사람들' 화면이 앞뒤에 붙어요.</div>
+  <div class="box">
+    <div class="h">찍은 장면</div>
+    <div class="scene-list" id="scene-list"></div>
+  </div>
+  <div class="box">
+    <div class="h">영상 합치기</div>
+    <div class="stage"><canvas id="merge-canvas" width="1280" height="720"></canvas><video id="final-video" controls playsinline hidden></video></div>
+    <div class="progress" aria-hidden="true"><i id="merge-bar"></i></div>
+    <div class="note" id="merge-msg">세 장면을 모두 찍으면 합칠 수 있어요. 합치는 동안 화면을 끄거나 다른 앱으로 가지 마세요.</div>
+    <div class="btns"><button class="btn main" id="merge-btn">영상 합치기</button></div>
+    <div class="field" id="save-box" hidden>
+      <label for="fname">파일 이름</label>
+      <input type="text" id="fname">
+      <div class="btns"><a class="btn main" id="save-link" download>태블릿에 저장</a></div>
+      <div class="note">저장한 영상은 패들렛 ＋ → 업로드에서 골라 올려요.</div>
+    </div>
+  </div>
+  <div class="box">
+    <div class="h">새로 시작하기</div>
+    <div class="note">적은 내용과 찍은 장면이 이 기기에서 모두 지워져요. 저장한 완성 영상은 그대로 있어요.</div>
+    <div class="btns"><button class="btn ghost" id="reset-btn">새 뉴스 만들기</button><button class="btn rec" id="reset-yes" hidden>정말 지우기</button><button class="btn ghost" id="reset-no" hidden>취소</button></div>
+  </div>
+</section>
+</main>
+
+<footer class="nav">
+  <button class="btn ghost" id="prev">‹ 이전</button>
+  <button class="btn main" id="next">다음 ›</button>
+</footer>
+
+<template id="shoot-tpl">
+  <div class="h">② 촬영 <span class="sub tgt"></span></div>
+  <div class="stage">
+    <canvas width="1280" height="720"></canvas>
+    <video class="review" controls playsinline hidden></video>
+    <span class="hint" hidden></span>
+    <span class="rec-badge" hidden>● 0:00</span>
+  </div>
+  <div class="cam-msg" hidden></div>
+  <div class="btns live-btns">
+    <button class="btn cam-on">카메라 켜기</button>
+    <button class="btn ghost cam-flip" disabled>앞·뒤 카메라 바꾸기</button>
+    <button class="btn rec rec-btn" disabled>● 녹화 시작</button>
+  </div>
+  <div class="btns review-btns" hidden>
+    <button class="btn ghost redo">다시 찍기</button>
+    <button class="btn main keep">장면 저장</button>
+  </div>
+  <div class="status no"></div>
+</template>
+
+<script>
+(() => {
+'use strict';
+/* ---------- 기본 데이터 ---------- */
+const STEPS = ['뉴스 준비','날씨 자료','장면 1','장면 2','장면 3','완성'];
+const THEMES = {
+  blue:{name:'블루',a:'#1f5fd1',b:'#0f2f73'}, night:{name:'나이트',a:'#2a3a7a',b:'#0a1030'},
+  purple:{name:'퍼플',a:'#7048c6',b:'#2e1660'}, red:{name:'레드',a:'#d0383f',b:'#5c1218'}, green:{name:'그린',a:'#1d8c68',b:'#0a3b2c'}
+};
+const W_ROWS = [
+  {k:'min', lab:'최저 기온 (℃)', t:'num'}, {k:'max', lab:'최고 기온 (℃)', t:'num'}, {k:'feel', lab:'체감온도 (℃)', t:'num'},
+  {k:'rain', lab:'강수량 (mm)', t:'num'}, {k:'hum', lab:'습도 (%)', t:'num'},
+  {k:'wind', lab:'바람', t:'chip', opts:['약함','보통','강함']},
+  {k:'cloud', lab:'구름의 양', t:'chip', opts:['맑음','구름 많음','흐림']},
+  {k:'dust', lab:'미세먼지', t:'chip', opts:['좋음','보통','나쁨','매우 나쁨']}
+];
+const SCENES = {s1:{step:3,name:'장면 1 오프닝',tgt:'20초 안팎'}, s2:{step:4,name:'장면 2 날씨예보',tgt:'40초~1분'}, s3:{step:5,name:'장면 3 인터뷰',tgt:'40초~1분',hint:'태블릿을 가로로 들고 찍어요'}};
+
+const KEY = 'weather-news-v1';
+const blank = () => ({news:'', r:{anchor:'',caster:'',reporter:'',citizen:''}, theme:'blue',
+  w:{region:'', tip:'', d1:'', d2:'', today:{}, tomorrow:{}}, c1:'', c2:'', side:'right', iv:true, town:'', fx:'auto', c3:''});
+let S = blank();
+try { const raw = localStorage.getItem(KEY); if (raw) S = Object.assign(blank(), JSON.parse(raw)); } catch (e) {}
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
+const $ = (s, el=document) => el.querySelector(s);
+const $$ = (s, el=document) => [...el.querySelectorAll(s)];
+const fmtDate = d => { const z = n => String(n).padStart(2,'0'); return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`; };
+if (!S.w.d1) { const t = new Date(); S.w.d1 = fmtDate(t); const m = new Date(t); m.setDate(t.getDate()+1); S.w.d2 = fmtDate(m); }
+
+/* ---------- 장면 영상 보관 (IndexedDB, 안 되면 메모리) ---------- */
+const mem = new Map(); let idb = null;
+const openDB = () => new Promise(res => {
+  try { const r = indexedDB.open('weather-news', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('scenes');
+    r.onsuccess = () => { idb = r.result; res(); }; r.onerror = () => res();
+  } catch (e) { res(); }
+});
+const tx = (mode, fn) => new Promise(res => {
+  if (!idb) return res(null);
+  try { const t = idb.transaction('scenes', mode); const st = t.objectStore('scenes'); const rq = fn(st);
+    t.oncomplete = () => res(rq ? rq.result : null); t.onerror = () => res(null);
+  } catch (e) { res(null); }
+});
+const sceneStore = {
+  async put(k, v){ mem.set(k, v); await tx('readwrite', st => st.put(v, k)); },
+  async get(k){ if (mem.has(k)) return mem.get(k); const v = await tx('readonly', st => st.get(k)); if (v) mem.set(k, v); return v || null; },
+  async del(k){ mem.delete(k); await tx('readwrite', st => st.delete(k)); },
+  async clear(){ mem.clear(); await tx('readwrite', st => st.clear()); }
+};
+const saved = {s1:false, s2:false, s3:false};
+
+/* ---------- 단계 이동 ---------- */
+let cur = 1;
+function buildSteps(){
+  const nav = $('#steps'); nav.textContent = '';
+  STEPS.forEach((name, i) => {
+    const b = document.createElement('button'); b.className = 'step-pill' + (cur === i+1 ? ' on' : ''); b.type = 'button';
+    const n = document.createElement('span'); n.className = 'n'; n.textContent = i+1; b.append(n, document.createTextNode(name));
+    const sk = Object.keys(SCENES).find(k => SCENES[k].step === i+1);
+    if (sk && saved[sk]) { const t = document.createElement('span'); t.className = 'tick'; t.textContent = '✓'; b.append(t); }
+    b.onclick = () => go(i+1); nav.append(b);
+  });
+}
+function go(n){
+  cur = Math.max(1, Math.min(6, n));
+  $$('section.step').forEach(s => s.hidden = Number(s.dataset.step) !== cur);
+  $('#prev').disabled = cur === 1;
+  $('#next').textContent = cur === 6 ? '처음으로 ›' : `다음: ${STEPS[cur]} ›`;
+  buildSteps(); window.scrollTo({top:0});
+  if (cur === 6) refreshSceneList();
+}
+$('#prev').onclick = () => go(cur - 1);
+$('#next').onclick = () => go(cur === 6 ? 1 : cur + 1);
+
+/* ---------- 입력 연결 ---------- */
+function bindText(id, get, set){ const el = $('#'+id); el.value = get() || ''; el.addEventListener('input', () => { set(el.value); save(); }); }
+bindText('news', () => S.news, v => S.news = v);
+['anchor','caster','reporter','citizen'].forEach(k => bindText('r-'+k, () => S.r[k], v => S.r[k] = v));
+bindText('w-region', () => S.w.region, v => S.w.region = v);
+bindText('w-tip', () => S.w.tip, v => S.w.tip = v);
+bindText('d-today', () => S.w.d1, v => S.w.d1 = v);
+bindText('d-tomorrow', () => S.w.d2, v => S.w.d2 = v);
+bindText('c1', () => S.c1, v => S.c1 = v);
+bindText('c2', () => S.c2, v => S.c2 = v);
+bindText('c3', () => S.c3, v => S.c3 = v);
+bindText('town', () => S.town, v => S.town = v);
+
+function chipGroup(box, opts, get, set){
+  box.textContent = '';
+  opts.forEach(([val, label]) => {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'chip' + (get() === val ? ' on' : ''); b.textContent = label;
+    b.onclick = () => { set(get() === val && box.dataset.toggle ? '' : val); save(); chipGroup(box, opts, get, set); };
+    box.append(b);
+  });
+}
+// 날씨 표
+(function buildWeather(){
+  const tb = $('#wtable tbody');
+  W_ROWS.forEach(row => {
+    const tr = document.createElement('tr');
+    const td0 = document.createElement('td'); td0.className = 'lab'; td0.textContent = row.lab; tr.append(td0);
+    ['today','tomorrow'].forEach(day => {
+      const td = document.createElement('td');
+      if (row.t === 'num') {
+        const i = document.createElement('input'); i.type = 'number'; i.inputMode = 'decimal'; i.id = `w-${day}-${row.k}`;
+        i.setAttribute('aria-label', `${day === 'today' ? '오늘' : '내일'} ${row.lab}`); i.value = S.w[day][row.k] ?? '';
+        i.addEventListener('input', () => { S.w[day][row.k] = i.value; save(); }); td.append(i);
+      } else {
+        const box = document.createElement('div'); box.className = 'chips'; box.dataset.toggle = '1'; box.id = `w-${day}-${row.k}`;
+        chipGroup(box, row.opts.map(o => [o, o]), () => S.w[day][row.k], v => S.w[day][row.k] = v); td.append(box);
+      }
+      tr.append(td);
+    });
+    tb.append(tr);
+  });
+})();
+// 뉴스룸
+(function buildThemes(){
+  const box = $('#themes'); box.textContent = '';
+  Object.entries(THEMES).forEach(([k, t]) => {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'theme' + (S.theme === k ? ' on' : '');
+    const sw = document.createElement('span'); sw.className = 'sw'; sw.style.background = `linear-gradient(135deg, ${t.a}, ${t.b})`;
+    b.append(sw, document.createTextNode(t.name + ' 뉴스룸'));
+    b.onclick = () => { S.theme = k; save(); buildThemes(); }; box.append(b);
+  });
+})();
+chipGroup($('#board-side'), [['right','오른쪽'],['left','왼쪽']], () => S.side, v => S.side = v || 'right');
+chipGroup($('#fx'), [['auto','오늘 날씨대로'],['rain','비'],['snow','눈'],['none','없음']], () => S.fx, v => S.fx = v || 'auto');
+function buildIv(){
+  const box = $('#iv-toggle'); box.textContent = '';
+  [[true,'인터뷰 넣기'],[false,'인터뷰 빼기']].forEach(([v, label]) => {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'btn' + (S.iv === v ? ' main' : ''); b.textContent = label;
+    b.onclick = () => { S.iv = v; save(); buildIv(); }; box.append(b);
+  });
+  $('#iv-opts').hidden = !S.iv;
+  const sh = $('.shoot[data-scene="s3"]'); if (sh) sh.hidden = !S.iv;
+}
+
+/* ---------- 카메라 ---------- */
+const cam = { stream:null, video:document.createElement('video'), facing:'environment', ok:false };
+cam.video.muted = true; cam.video.playsInline = true;
+async function startCam(){
+  stopCam();
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('nodevice');
+  const v = {facingMode: cam.facing, width:{ideal:1280}, height:{ideal:720}};
+  try { cam.stream = await navigator.mediaDevices.getUserMedia({video:v, audio:{echoCancellation:true, noiseSuppression:true}}); cam.mic = true; }
+  catch (e) { cam.stream = await navigator.mediaDevices.getUserMedia({video:v}); cam.mic = false; }
+  cam.video.srcObject = cam.stream; await cam.video.play().catch(() => {}); cam.ok = true;
+}
+function stopCam(){ if (cam.stream) cam.stream.getTracks().forEach(t => t.stop()); cam.stream = null; cam.ok = false; }
+
+/* ---------- 그리기 도구 ---------- */
+const FONT = '"Jua","Noto Sans KR",sans-serif';
+const BODY = '"Noto Sans KR",sans-serif';
+function rr(ctx, x, y, w, h, r){ ctx.beginPath(); ctx.moveTo(x+r, y); ctx.arcTo(x+w, y, x+w, y+h, r); ctx.arcTo(x+w, y+h, x, y+h, r); ctx.arcTo(x, y+h, x, y, r); ctx.arcTo(x, y, x+w, y, r); ctx.closePath(); }
+function drawCover(ctx, src, x, y, w, h){
+  const vw = src.videoWidth, vh = src.videoHeight;
+  ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+  if (vw && vh) {
+    const s = Math.max(w / vw, h / vh), dw = vw * s, dh = vh * s;
+    if (cam.facing === 'user' && src === cam.video) { ctx.translate(x + w, y); ctx.scale(-1, 1); ctx.drawImage(src, (w - dw) / 2, (h - dh) / 2, dw, dh); }
+    else ctx.drawImage(src, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+  } else { // 카메라가 꺼져 있을 때 자리 표시
+    const g = ctx.createLinearGradient(x, y, x, y + h); g.addColorStop(0, '#3a4766'); g.addColorStop(1, '#1b2338'); ctx.fillStyle = g; ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = 'rgba(255,255,255,.18)'; const cx = x + w / 2, cy = y + h * 0.56;
+    ctx.beginPath(); ctx.arc(cx, cy - h * 0.16, h * 0.11, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(cx, cy + h * 0.2, h * 0.22, h * 0.2, 0, Math.PI, 0); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.font = `28px ${BODY}`; ctx.textAlign = 'center'; ctx.fillText('카메라 화면', cx, y + 50); ctx.textAlign = 'left';
+  }
+  ctx.restore();
+}
+function sun(ctx, x, y, r){ ctx.save(); ctx.fillStyle = '#ffcc33'; ctx.strokeStyle = '#ffcc33'; ctx.lineWidth = r * 0.16; ctx.lineCap = 'round';
+  for (let i = 0; i < 8; i++){ const a = i * Math.PI / 4; ctx.beginPath(); ctx.moveTo(x + Math.cos(a) * r * 1.3, y + Math.sin(a) * r * 1.3); ctx.lineTo(x + Math.cos(a) * r * 1.75, y + Math.sin(a) * r * 1.75); ctx.stroke(); }
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
+function cloud(ctx, x, y, s, col){ ctx.save(); ctx.fillStyle = col; ctx.beginPath();
+  ctx.arc(x - s * 0.55, y + s * 0.1, s * 0.42, 0, Math.PI * 2); ctx.arc(x, y - s * 0.12, s * 0.55, 0, Math.PI * 2); ctx.arc(x + s * 0.55, y + s * 0.08, s * 0.45, 0, Math.PI * 2);
+  ctx.rect(x - s * 0.95, y + s * 0.05, s * 1.9, s * 0.5); ctx.fill(); ctx.restore(); }
+function icon(ctx, x, y, s, day){
+  const c = day.cloud || '', rain = parseFloat(day.rain) > 0, cold = parseFloat(day.min) <= 0;
+  if (c === '맑음' && !rain) sun(ctx, x, y, s * 0.42);
+  else if (c === '구름 많음' && !rain) { sun(ctx, x - s * 0.25, y - s * 0.2, s * 0.32); cloud(ctx, x + s * 0.12, y + s * 0.1, s * 0.5, '#eef2f8'); }
+  else { cloud(ctx, x, y - (rain ? s * 0.1 : 0), s * 0.55, rain ? '#c9d2e3' : '#dfe5ef');
+    if (rain) { ctx.save(); ctx.strokeStyle = cold ? '#ffffff' : '#7cc0ff'; ctx.lineWidth = s * 0.06; ctx.lineCap = 'round';
+      for (let i = -1; i <= 1; i++){ ctx.beginPath(); ctx.moveTo(x + i * s * 0.3, y + s * 0.32); ctx.lineTo(x + i * s * 0.3 - s * 0.08, y + s * 0.55); ctx.stroke(); } ctx.restore(); } }
+  if (!c && !rain) { ctx.save(); ctx.fillStyle = 'rgba(255,255,255,.5)'; ctx.font = `${s * 0.3}px ${BODY}`; ctx.textAlign = 'center'; ctx.fillText('?', x, y + s * 0.1); ctx.restore(); }
+}
+const theme = () => THEMES[S.theme] || THEMES.blue;
+const newsName = () => (S.news.trim() || '우리 반') + ' 뉴스';
+function clock(){ const d = new Date(); return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; }
+function topBar(ctx, label){
+  const t = theme();
+  rr(ctx, 28, 24, 92, 40, 8); ctx.fillStyle = '#e23a3f'; ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.font = `26px ${FONT}`; ctx.fillText('LIVE', 44, 53);
+  ctx.font = `26px ${FONT}`; const nw = ctx.measureText(newsName()).width;
+  rr(ctx, 130, 24, nw + 32, 40, 8); ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fill(); ctx.fillStyle = '#fff'; ctx.fillText(newsName(), 146, 53);
+  if (label) { const lw = ctx.measureText(label).width; rr(ctx, 130 + nw + 42, 24, lw + 32, 40, 8); ctx.fillStyle = t.a; ctx.fill(); ctx.fillStyle = '#fff'; ctx.fillText(label, 130 + nw + 58, 53); }
+  ctx.font = `24px ${BODY}`; ctx.textAlign = 'right'; ctx.fillStyle = 'rgba(0,0,0,.5)'; rr(ctx, 1162, 24, 90, 40, 8); ctx.fill(); ctx.fillStyle = '#fff'; ctx.fillText(clock(), 1238, 53); ctx.textAlign = 'left';
+}
+function nameTag(ctx, x, y, role, name, align){
+  const t = theme(); ctx.font = `bold 24px ${BODY}`; const rw = ctx.measureText(role).width + 28;
+  ctx.font = `34px ${FONT}`; const nm = name || '이름'; const nw = ctx.measureText(nm).width + 36;
+  const w = rw + nw, x0 = align === 'right' ? x - w : x;
+  rr(ctx, x0, y, rw + 12, 56, 10); ctx.fillStyle = t.a; ctx.fill();
+  rr(ctx, x0 + rw, y, nw, 56, 10); ctx.fillStyle = '#ffffff'; ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.font = `bold 24px ${BODY}`; ctx.fillText(role, x0 + 14, y + 37);
+  ctx.fillStyle = '#18213a'; ctx.font = `34px ${FONT}`; ctx.fillText(nm, x0 + rw + 18, y + 40);
+}
+function ticker(ctx, text, now){
+  if (!text) return; const t = theme();
+  ctx.fillStyle = t.b; ctx.fillRect(0, 664, 1280, 56); ctx.fillStyle = t.a; ctx.fillRect(0, 664, 150, 56);
+  ctx.fillStyle = '#fff'; ctx.font = `26px ${FONT}`; ctx.fillText('뉴스 속보', 22, 701);
+  ctx.save(); ctx.beginPath(); ctx.rect(160, 664, 1120, 56); ctx.clip();
+  ctx.font = `28px ${BODY}`; const w = ctx.measureText(text).width; const span = 1120 + w; const off = (now / 12) % span;
+  ctx.fillText(text, 1280 - off, 702); ctx.restore();
+}
+const particles = Array.from({length:120}, () => ({x:Math.random()*1280, y:Math.random()*720, v:0.6 + Math.random()*0.8}));
+function weatherFx(ctx, kind, now){
+  if (kind === 'none' || !kind) return;
+  ctx.save();
+  particles.forEach(p => {
+    if (kind === 'rain') { const y = (p.y + now * 0.9 * p.v) % 760 - 40; ctx.strokeStyle = 'rgba(190,220,255,.7)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(p.x, y); ctx.lineTo(p.x - 6, y + 22); ctx.stroke(); }
+    else { const y = (p.y + now * 0.12 * p.v) % 740 - 20; const x = p.x + Math.sin(now / 900 + p.y) * 12; ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.beginPath(); ctx.arc(x, y, 3 + p.v * 2, 0, Math.PI * 2); ctx.fill(); }
+  });
+  ctx.restore();
+}
+const fxKind = () => { if (S.fx !== 'auto') return S.fx; const d = S.w.today; if (parseFloat(d.rain) > 0) return parseFloat(d.min) <= 0 ? 'snow' : 'rain'; return 'none'; };
+
+/* ---------- 장면별 화면 ---------- */
+function drawS1(ctx, now){
+  const t = theme(); drawCover(ctx, cam.video, 0, 0, 1280, 720);
+  // 뉴스룸 테두리
+  ctx.strokeStyle = t.a; ctx.lineWidth = 10; ctx.strokeRect(5, 5, 1270, 710);
+  // 앵커 데스크
+  const g = ctx.createLinearGradient(0, 560, 0, 720); g.addColorStop(0, t.a); g.addColorStop(1, t.b);
+  ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(150, 575); ctx.lineTo(1130, 575); ctx.lineTo(1230, 720); ctx.lineTo(50, 720); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.18)'; ctx.fillRect(150, 575, 980, 8);
+  ctx.fillStyle = '#fff'; ctx.font = `44px ${FONT}`; ctx.textAlign = 'center'; ctx.fillText(newsName(), 640, 660); ctx.textAlign = 'left';
+  topBar(ctx, '오프닝');
+  nameTag(ctx, 60, 490, '아나운서', S.r.anchor);
+  ticker(ctx, S.c1.trim(), now);
+}
+function boardPanel(ctx, x, y, w, h){
+  const t = theme();
+  const g = ctx.createLinearGradient(x, y, x, y + h); g.addColorStop(0, t.a); g.addColorStop(1, t.b); rr(ctx, x, y, w, h, 18); ctx.fillStyle = g; ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.font = `40px ${FONT}`; ctx.fillText(`${S.w.region.trim() || '우리 동네'} 날씨`, x + 26, y + 58);
+  const colW = (w - 66) / 2;
+  [['today','오늘',S.w.d1],['tomorrow','내일',S.w.d2]].forEach(([k, label, ds], i) => {
+    const d = S.w[k] || {}; const cx = x + 22 + i * (colW + 22);
+    rr(ctx, cx, y + 82, colW, h - 104, 14); ctx.fillStyle = 'rgba(255,255,255,.12)'; ctx.fill();
+    let md = ''; if (ds) { const p = ds.split('-'); if (p.length === 3) md = ` ${Number(p[1])}/${Number(p[2])}`; }
+    ctx.fillStyle = '#fff'; ctx.font = `30px ${FONT}`; ctx.fillText(label + md, cx + 18, y + 122);
+    icon(ctx, cx + colW - 62, y + 120, 70, d);
+    const tmin = d.min !== undefined && d.min !== '' ? `${d.min}°` : '-°', tmax = d.max !== undefined && d.max !== '' ? `${d.max}°` : '-°';
+    ctx.font = `52px ${FONT}`; ctx.fillStyle = '#8fd0ff'; ctx.fillText(tmin, cx + 18, y + 205); const mw = ctx.measureText(tmin).width;
+    ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.fillText(' / ', cx + 18 + mw, y + 205); const sw2 = ctx.measureText(' / ').width;
+    ctx.fillStyle = '#ffb38a'; ctx.fillText(tmax, cx + 18 + mw + sw2, y + 205);
+    const rows = [['체감', d.feel !== undefined && d.feel !== '' ? `${d.feel}°` : '-'], ['강수량', d.rain !== undefined && d.rain !== '' ? `${d.rain}mm` : '-'],
+      ['습도', d.hum !== undefined && d.hum !== '' ? `${d.hum}%` : '-'], ['바람', d.wind || '-'], ['구름', d.cloud || '-'], ['미세먼지', d.dust || '-']];
+    rows.forEach(([a, b], j) => {
+      const ry = y + 252 + j * 44; ctx.font = `22px ${BODY}`; ctx.fillStyle = 'rgba(255,255,255,.7)'; ctx.fillText(a, cx + 18, ry);
+      ctx.font = `bold 24px ${BODY}`; ctx.fillStyle = '#fff'; ctx.textAlign = 'right'; ctx.fillText(b, cx + colW - 18, ry); ctx.textAlign = 'left';
+      if (a === '미세먼지' && d.dust) { const col = {'좋음':'#3ec27a','보통':'#4aa3ff','나쁨':'#ffae35','매우 나쁨':'#ff5a5a'}[d.dust]; ctx.fillStyle = col; ctx.beginPath(); ctx.arc(cx + colW - 30 - ctx.measureText(b).width, ry - 8, 7, 0, Math.PI * 2); ctx.fill(); }
+    });
+  });
+}
+function drawS2(ctx, now){
+  const t = theme(); ctx.fillStyle = t.b; ctx.fillRect(0, 0, 1280, 720);
+  const left = S.side === 'left';
+  const camX = left ? 660 : 0; drawCover(ctx, cam.video, camX, 0, 620, 720);
+  boardPanel(ctx, left ? 24 : 636, 84, 620, 566);
+  topBar(ctx, '날씨예보');
+  nameTag(ctx, camX + 30, 586, '기상캐스터', S.r.caster);
+  ticker(ctx, (S.c2.trim() || S.w.tip.trim()), now);
+}
+function drawS3(ctx, now){
+  drawCover(ctx, cam.video, 0, 0, 1280, 720);
+  weatherFx(ctx, fxKind(), now);
+  topBar(ctx, `현장 연결 · ${S.w.region.trim() || '우리 동네'}`);
+  nameTag(ctx, 40, 586, '기자', S.r.reporter);
+  const cz = (S.r.citizen || '이름') + (S.town.trim() ? ` / ${S.town.trim()}` : '');
+  nameTag(ctx, 1240, 586, '시민', cz, 'right');
+  ticker(ctx, S.c3.trim(), now);
+}
+const DRAW = {s1:drawS1, s2:drawS2, s3:drawS3};
+
+/* ---------- 촬영 모듈 ---------- */
+function pickMime(){
+  const c = ['video/mp4;codecs=avc1,mp4a.40.2','video/mp4','video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'];
+  for (const m of c) { try { if (window.MediaRecorder && MediaRecorder.isTypeSupported(m)) return m; } catch (e) {} } return '';
+}
+const shooters = {};
+function makeShooter(box){
+  const key = box.dataset.scene, info = SCENES[key];
+  box.append($('#shoot-tpl').content.cloneNode(true));
+  const el = {canvas:$('canvas', box), review:$('video.review', box), hint:$('.hint', box), badge:$('.rec-badge', box), msg:$('.cam-msg', box),
+    on:$('.cam-on', box), flip:$('.cam-flip', box), rec:$('.rec-btn', box), live:$('.live-btns', box), rv:$('.review-btns', box),
+    redo:$('.redo', box), keep:$('.keep', box), status:$('.status', box), tgt:$('.tgt', box)};
+  el.tgt.textContent = `· 목표 ${info.tgt}` + (info.hint ? ` · ${info.hint}` : '');
+  const ctx = el.canvas.getContext('2d');
+  const st = {rec:null, chunks:[], t0:0, blob:null, type:'', dur:0, reviewing:false};
+  const setStatus = () => { el.status.className = 'status ' + (saved[key] ? 'ok' : 'no'); el.status.textContent = saved[key] ? '✓ 저장한 장면이 있어요. 다시 찍으면 바뀌어요.' : '아직 저장한 장면이 없어요.'; };
+  setStatus();
+  const syncBtns = () => { el.flip.disabled = !cam.ok || !!st.rec; el.rec.disabled = !cam.ok; el.on.textContent = cam.ok ? '카메라 다시 켜기' : '카메라 켜기'; };
+  el.on.onclick = async () => {
+    el.msg.hidden = true;
+    try { await startCam(); if (!cam.mic) { el.msg.textContent = '마이크가 꺼져 있어 소리 없이 찍혀요. 마이크를 허용하면 소리도 함께 찍혀요.'; el.msg.hidden = false; } }
+    catch (e) { el.msg.textContent = '카메라를 켤 수 없어요. 주소가 https인지, 카메라 허용을 눌렀는지 확인해요.'; el.msg.hidden = false; }
+    Object.values(shooters).forEach(s => s.sync());
+  };
+  el.flip.onclick = async () => { cam.facing = cam.facing === 'user' ? 'environment' : 'user'; try { await startCam(); } catch (e) {} Object.values(shooters).forEach(s => s.sync()); };
+  el.rec.onclick = () => {
+    if (st.rec) { st.rec.stop(); return; }
+    const vs = el.canvas.captureStream(30); const tracks = [...vs.getVideoTracks()];
+    if (cam.stream) cam.stream.getAudioTracks().forEach(t => tracks.push(t));
+    const mime = pickMime(); let rec;
+    try { rec = mime ? new MediaRecorder(new MediaStream(tracks), {mimeType:mime, videoBitsPerSecond:3500000}) : new MediaRecorder(new MediaStream(tracks)); }
+    catch (e) { el.msg.textContent = '이 기기에서는 녹화를 할 수 없어요. 크롬 최신 버전에서 열어 주세요.'; el.msg.hidden = false; return; }
+    st.chunks = []; st.rec = rec; st.t0 = performance.now();
+    rec.ondataavailable = e => { if (e.data && e.data.size) st.chunks.push(e.data); };
+    rec.onstop = () => {
+      st.dur = (performance.now() - st.t0) / 1000; st.type = rec.mimeType || mime || 'video/webm';
+      st.blob = new Blob(st.chunks, {type:st.type}); st.rec = null; el.badge.hidden = true; el.rec.textContent = '● 녹화 시작'; el.rec.classList.add('rec');
+      el.review.src = URL.createObjectURL(st.blob); el.review.hidden = false; st.reviewing = true; el.live.hidden = true; el.rv.hidden = false; syncBtns();
+    };
+    rec.start(500); el.badge.hidden = false; el.rec.textContent = '■ 멈추기'; syncBtns();
+  };
+  el.redo.onclick = () => { st.reviewing = false; el.review.pause(); el.review.hidden = true; el.rv.hidden = true; el.live.hidden = false; };
+  el.keep.onclick = async () => {
+    await sceneStore.put(key, {blob:st.blob, type:st.type, dur:st.dur}); saved[key] = true; setStatus(); buildSteps();
+    st.reviewing = false; el.review.pause(); el.review.hidden = true; el.rv.hidden = true; el.live.hidden = false;
+    el.status.textContent = '✓ 장면을 저장했어요.';
+  };
+  shooters[key] = {
+    sync: syncBtns, setStatus,
+    frame(now){
+      if (box.offsetParent === null || st.reviewing) return;
+      DRAW[key](ctx, now);
+      if (st.rec) { const s = Math.floor((performance.now() - st.t0) / 1000); el.badge.textContent = `● ${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`; }
+    }
+  };
+}
+$$('.shoot').forEach(makeShooter);
+buildIv();
+function loop(now){ Object.values(shooters).forEach(s => s.frame(now)); requestAnimationFrame(loop); }
+
+/* ---------- 완성 ---------- */
+async function refreshSceneList(){
+  const list = $('#scene-list'); list.textContent = '';
+  for (const k of ['s1','s2','s3']) {
+    const row = document.createElement('div'); row.className = 'scene-row';
+    const b = document.createElement('b'); b.textContent = SCENES[k].name;
+    const right = document.createElement('span');
+    if (k === 's3' && !S.iv) { right.className = 'status no'; right.textContent = '인터뷰 빼기'; }
+    else if (saved[k]) { const rec = await sceneStore.get(k); right.className = 'status ok'; right.textContent = `찍었어요 · ${Math.round(rec ? rec.dur : 0)}초`; }
+    else { const a = document.createElement('button'); a.className = 'btn ghost'; a.textContent = '아직이에요 › 찍으러 가기'; a.onclick = () => go(SCENES[k].step); right.append(a); }
+    row.append(b, right); list.append(row);
+  }
+  const need = ['s1','s2'].concat(S.iv ? ['s3'] : []);
+  $('#merge-btn').disabled = !need.every(k => saved[k]) || merging;
+}
+function titleCard(ctx, p){
+  const t = theme(); const g = ctx.createLinearGradient(0, 0, 1280, 720); g.addColorStop(0, t.a); g.addColorStop(1, t.b); ctx.fillStyle = g; ctx.fillRect(0, 0, 1280, 720);
+  ctx.globalAlpha = Math.min(1, p * 3); sun(ctx, 1080, 170, 60); cloud(ctx, 1130, 230, 110, '#ffffff');
+  ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.font = `92px ${FONT}`; ctx.fillText(newsName(), 640, 360);
+  ctx.font = `40px ${BODY}`; ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.fillText(`${S.w.region.trim() || '우리 동네'} 날씨 뉴스 · ${S.w.d1 || ''}`, 640, 430);
+  ctx.textAlign = 'left'; ctx.globalAlpha = 1;
+}
+function creditCard(ctx, p){
+  const t = theme(); ctx.fillStyle = t.b; ctx.fillRect(0, 0, 1280, 720);
+  ctx.globalAlpha = Math.min(1, p * 3); ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.font = `60px ${FONT}`; ctx.fillText('함께한 사람들', 640, 170);
+  const rows = [['아나운서', S.r.anchor], ['기상캐스터', S.r.caster]].concat(S.iv ? [['기자', S.r.reporter], ['시민', S.r.citizen]] : []);
+  rows.forEach(([a, b], i) => { const y = 270 + i * 76; ctx.font = `30px ${BODY}`; ctx.fillStyle = 'rgba(255,255,255,.7)'; ctx.textAlign = 'right'; ctx.fillText(a, 600, y);
+    ctx.font = `44px ${FONT}`; ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.fillText(b || '-', 680, y); });
+  ctx.textAlign = 'center'; ctx.font = `28px ${BODY}`; ctx.fillStyle = 'rgba(255,255,255,.7)'; ctx.fillText(newsName(), 640, 650); ctx.textAlign = 'left'; ctx.globalAlpha = 1;
+}
+let merging = false, finalUrl = '';
+$('#merge-btn').onclick = async () => {
+  if (merging) return; merging = true; $('#merge-btn').disabled = true; $('#save-box').hidden = true;
+  const msg = $('#merge-msg'), bar = $('#merge-bar'), canvas = $('#merge-canvas'), ctx = canvas.getContext('2d'), fv = $('#final-video');
+  fv.hidden = true; fv.pause();
+  const keys = ['s1','s2'].concat(S.iv ? ['s3'] : []);
+  const recs = []; for (const k of keys) recs.push(await sceneStore.get(k));
+  const TITLE = 3, CREDIT = 4; const total = TITLE + CREDIT + recs.reduce((a, r) => a + (r ? r.dur : 0), 0);
+  let done = 0; const tick = () => { bar.style.width = `${Math.min(100, done / total * 100)}%`; msg.textContent = `영상 합치는 중… ${Math.round(Math.min(100, done / total * 100))}% · 다 될 때까지 화면을 끄거나 다른 앱으로 가지 마세요.`; };
+  let ac, dest;
+  try { ac = new (window.AudioContext || window.webkitAudioContext)(); await ac.resume(); dest = ac.createMediaStreamDestination(); } catch (e) { ac = null; }
+  const tracks = [...canvas.captureStream(30).getVideoTracks()]; if (dest) dest.stream.getAudioTracks().forEach(t => tracks.push(t));
+  const mime = pickMime(); const chunks = [];
+  let rec; try { rec = mime ? new MediaRecorder(new MediaStream(tracks), {mimeType:mime, videoBitsPerSecond:3500000}) : new MediaRecorder(new MediaStream(tracks)); }
+  catch (e) { msg.textContent = '이 기기에서는 영상을 합칠 수 없어요.'; merging = false; refreshSceneList(); return; }
+  rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+  const stopped = new Promise(r => rec.onstop = r);
+  rec.start(500);
+  const card = (fn, secs) => new Promise(res => { const t0 = performance.now(); const base = done;
+    const f = () => { const p = (performance.now() - t0) / 1000; fn(ctx, p / secs); done = base + Math.min(p, secs); tick(); if (p < secs) requestAnimationFrame(f); else res(); }; f(); });
+  const play = r => new Promise(res => {
+    const v = document.createElement('video'); v.playsInline = true; v.src = URL.createObjectURL(r.blob); const base = done; let node = null;
+    if (ac) { try { node = ac.createMediaElementSource(v); node.connect(dest); } catch (e) {} } else v.muted = true;
+    const f = () => { if (v.readyState >= 2) { ctx.drawImage(v, 0, 0, 1280, 720); } done = base + Math.min(v.currentTime || 0, r.dur); tick(); if (!v.ended) requestAnimationFrame(f); };
+    v.onended = () => { done = base + r.dur; if (node) try { node.disconnect(); } catch (e) {} URL.revokeObjectURL(v.src); res(); };
+    v.onerror = () => res();
+    v.play().then(f).catch(() => res());
+  });
+  try {
+    await card(titleCard, TITLE);
+    for (const r of recs) if (r) await play(r);
+    await card(creditCard, CREDIT);
+  } finally { rec.stop(); }
+  await stopped; if (ac) try { ac.close(); } catch (e) {}
+  const type = rec.mimeType || mime || 'video/webm'; const blob = new Blob(chunks, {type});
+  if (finalUrl) URL.revokeObjectURL(finalUrl); finalUrl = URL.createObjectURL(blob);
+  window.__final = {size:blob.size, type};
+  fv.src = finalUrl; fv.hidden = false; bar.style.width = '100%';
+  msg.textContent = '영상을 합쳤어요. 재생해서 확인한 뒤 저장해요.';
+  const ext = type.includes('mp4') ? 'mp4' : 'webm';
+  const fname = $('#fname'); fname.value = `${(S.news.trim() || '우리반')}_날씨뉴스`.replace(/[\\/:*?"<>|]/g, '');
+  const setLink = () => { $('#save-link').href = finalUrl; $('#save-link').download = `${fname.value || '날씨뉴스'}.${ext}`; };
+  fname.oninput = setLink; setLink(); $('#save-box').hidden = false;
+  merging = false; refreshSceneList();
+};
+$('#reset-btn').onclick = () => { $('#reset-btn').hidden = true; $('#reset-yes').hidden = false; $('#reset-no').hidden = false; };
+$('#reset-no').onclick = () => { $('#reset-btn').hidden = false; $('#reset-yes').hidden = true; $('#reset-no').hidden = true; };
+$('#reset-yes').onclick = async () => { await sceneStore.clear(); try { localStorage.removeItem(KEY); } catch (e) {} location.reload(); };
+
+/* ---------- 시작 ---------- */
+(async () => {
+  await openDB();
+  for (const k of ['s1','s2','s3']) saved[k] = !!(await sceneStore.get(k));
+  Object.values(shooters).forEach(s => { s.setStatus(); s.sync(); });
+  go(1);
+  try { await document.fonts.ready; } catch (e) {}
+  requestAnimationFrame(loop);
+})();
+window.__app = {go, S};
+})();
+</script>
+</body>
+</html>
